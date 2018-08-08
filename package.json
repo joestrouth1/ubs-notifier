@@ -11,9 +11,9 @@
   "license": "ISC",
   "dependencies": {
     "async": "^2.6.1",
+    "csvtojson": "^2.0.8",
     "dotenv": "^6.0.0",
     "mail-notifier": "^0.5.0",
-    "mime": "^2.3.1",
-    "uuid": "^3.3.2"
+    "mime": "^2.3.1"
   }
 }
