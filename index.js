@@ -8,7 +8,7 @@ const notifier = require('mail-notifier')
 
 /**
  * @desc Config for imap mail-notifier client
- * @prop {string} directory - Path to where attached files will be saved. CSVs in root, others in './invalid', json in './json' 
+ * @prop {string} directory - Path to where attached files will be saved. CSVs in root, json in './json' 
  */
 const imap = {
   user: process.env.EMAIL_USERNAME,
@@ -77,25 +77,37 @@ n.on('end', () => n.start())
               console.log(`CSV saved at ${filePath}`)
               // Convert CSV to JSON, reduce orders, and save output to 'json' subfolder
               readCsv(filePath)
-                .then(json => {
-                  return json.reduce(orderReducer, [])
+                .then(json => json.reduce(orderReducer, []))
+                .then(orders => {
+                  const jsonFileName = attachment.fileName.replace(/csv/, 'json')
+                  const jsonPath = (imap.directory || "/tmp") + '/json/' + jsonFileName;
+                  fs.writeFile(jsonPath, JSON.stringify(orders), (err) => {
+                    if (err) return console.error(err);
+                    return console.log(`JSON orders saved at ${jsonPath}`)
+                  })
                 })
-                .then(orders => console.dir(orders, {
-                  depth: null
-                }))
+
+              /** @todo Update Celigo integration to pull from json directory */
+              /** @todo Verify no overlap with the folders/depth that the SD integration is watching */
+
             }
           })
         } else {
           // if attachment is not CSV, save to 'invalid' subfolder
           console.warn(`Not a CSV file: ${attachment.fileName}`)
-          const invalidPath = `${imap.directory}/invalid/${attachment.fileName}`
+          /* 
+           * Removed saving of non-csv files, as they aren't needed on disk.
+           * Mainly due to tiny logos and links in email signatures and such.
+           * No telling what other attachments, of what size/type may get saved.
+           */
+          /* const invalidPath = `${imap.directory}/invalid/${attachment.fileName}`
           fs.writeFile(invalidPath, attachment.content, (err) => {
             if (err) {
               console.error(`error writing attachment at ${invalidPath}`, err)
             } else {
               console.log(`File saved at ${invalidPath}`)
             }
-          })
+          }) */
         }
       })
     } else {
