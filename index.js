@@ -3,6 +3,7 @@ require('dotenv').config()
 const fs = require('fs')
 const async = require('async')
 const mime = require('mime')
+const uuidv1 = require('uuid/v1')
 const csv = require('csvtojson')
 const notifier = require('mail-notifier')
 
@@ -70,16 +71,18 @@ n.on('end', () => n.start())
 
         // If attachment is CSV, save to root attachments folder
         if (fileExtension === 'csv') {
-          fs.writeFile(filePath, attachment.content, function (err) {
+          const uniqueId = uuidv1();
+          const uniqueFilePath = filePath.replace(/csv/, `${uniqueId}.csv`)
+          fs.writeFile(uniqueFilePath, attachment.content, function (err) {
             if (err) {
-              console.error(`error writing CSV to ${filePath}`, err)
+              console.error(`error writing CSV to ${uniqueFilePath}`, err)
             } else {
-              console.log(`CSV saved at ${filePath}`)
+              console.log(`CSV saved at ${uniqueFilePath}`)
               // Convert CSV to JSON, reduce orders, and save output to 'json' subfolder
-              readCsv(filePath)
+              readCsv(uniqueFilePath)
                 .then(json => json.reduce(orderReducer, []))
                 .then(orders => {
-                  const jsonFileName = attachment.fileName.replace(/csv/, 'json')
+                  const jsonFileName = attachment.fileName.replace(/csv/, `${uniqueId}.json`)
                   const jsonPath = (imap.directory || "/tmp") + '/json/' + jsonFileName;
                   fs.writeFile(jsonPath, JSON.stringify(orders), (err) => {
                     if (err) return console.error(err);
