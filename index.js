@@ -5,6 +5,7 @@ const async = require('async')
 const mime = require('mime')
 const uuidv1 = require('uuid/v1')
 const csv = require('csvtojson')
+const leftPad = require('left-pad')
 const notifier = require('mail-notifier')
 
 /**
@@ -146,6 +147,8 @@ function orderReducer(acc, next) {
     matchingPo.items = [...matchingPo.items, ...next.items]
     return acc
   } else {
+    // ensure that ZIP is 5 digits in case CSV trimmed leading zeroes
+    next.shipTo.zipCode = leftPad(next.shipTo.zipCode, 5, 0)
     return [...acc, next]
   }
 }
