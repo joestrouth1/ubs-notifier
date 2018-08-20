@@ -65,8 +65,7 @@ n.on('end', () => n.start())
     })
 
     if (attachments) {
-
-      async.each(attachments, (attachment, callback) => {
+      attachments.forEach(attachment => {
         const filePath = (imap.directory || "/tmp") + '/' + attachment.fileName;
         const fileExtension = mime.getExtension(attachment.contentType)
 
@@ -74,24 +73,37 @@ n.on('end', () => n.start())
         if (fileExtension === 'csv') {
           const uniqueId = uuidv1();
           const uniqueFilePath = filePath.replace(/csv/, `${uniqueId}.csv`)
-          fs.writeFile(uniqueFilePath, attachment.content, function (err) {
+          fs.writeFile(uniqueFilePath, attachment.content, async function (err) {
             if (err) {
-              console.error(`error writing CSV to ${uniqueFilePath}`, err)
+              console.error(`error writing CSV to ${uniqueFilePath}`)
+              throw err
             } else {
               console.log(`CSV saved at ${uniqueFilePath}`)
               // Convert CSV to JSON, reduce orders, and save output to 'json' subfolder
-              readCsv(uniqueFilePath)
-                .then(json => json.reduce(orderReducer, []))
-                .then(orders => {
-                  const jsonFileName = attachment.fileName.replace(/csv/, `${uniqueId}.json`)
-                  const jsonPath = (imap.directory || "/tmp") + '/json/' + jsonFileName;
-                  fs.writeFile(jsonPath, JSON.stringify(orders), (err) => {
-                    if (err) return console.error(err);
-                    return console.log(`JSON orders saved at ${jsonPath}`)
-                  })
-                })
 
-              /** @todo Update Celigo integration to pull from json directory */
+              const orders = await readCsv(uniqueFilePath)
+              const jsonFileName = attachment.fileName.replace(/csv/, `${uniqueId}.json`)
+              const jsonPath = (imap.directory || "/tmp") + '/json/' + jsonFileName;
+              fs.writeFile(jsonPath, JSON.stringify(orders), (err) => {
+                if (err) {
+                  console.error('error writing json to disk');
+                  throw err
+                }
+                return console.log(`JSON orders saved at ${jsonPath}`)
+              })
+
+              /* 
+                            readCsv(uniqueFilePath)
+                              .then(json => json.reduce(orderReducer, []), (e) => console.error(`error reducing JSON:`, e))
+                              .then(orders => {
+                                const jsonFileName = attachment.fileName.replace(/csv/, `${uniqueId}.json`)
+                                const jsonPath = (imap.directory || "/tmp") + '/json/' + jsonFileName;
+                                fs.writeFile(jsonPath, JSON.stringify(orders), (err) => {
+                                  if (err) return console.error(err);
+                                  return console.log(`JSON orders saved at ${jsonPath}`)
+                                })
+                              }, (e) => console.error('error saving json', e)) */
+
               /** @todo Verify no overlap with the folders/depth that the SD integration is watching */
 
             }
@@ -131,7 +143,8 @@ n.on('end', () => n.start())
  */
 async function readCsv(path) {
   const jsonArray = await converter.fromFile(path)
-  return jsonArray
+  const combinedOrders = jsonArray.reduce(orderReducer, [])
+  return combinedOrders
 }
 
 /**
