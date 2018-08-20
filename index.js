@@ -25,6 +25,25 @@ const imap = {
 };
 
 
+const converter = csv({
+  headers: [
+    'poNumber',
+    'items.0.quantity',
+    'items.0.model',
+    'items.0.description',
+    'shipTo.name',
+    'shipTo.company',
+    'shipTo.address1',
+    'shipTo.address2',
+    'shipTo.city',
+    'shipTo.stateCode',
+    'shipTo.zipCode',
+    'shipTo.shippingMethodCode',
+    'items.0.cost',
+    'orderDate',
+    'shipTo.phone',
+  ]
+})
 
 const n = notifier(imap)
 //@ts-ignore
@@ -53,29 +72,7 @@ n.on('end', () => n.start())
            * @description CSV->JSON constructor
            * @prop {array} Headers - Property names to replace CSVs current headers. Supports nested output.
            */
-          const converter = csv({
-            headers: [
-              'poNumber',
-              'items.0.quantity',
-              'items.0.model',
-              'items.0.description',
-              'shipTo.name',
-              'shipTo.company',
-              'shipTo.address1',
-              'shipTo.address2',
-              'shipTo.city',
-              'shipTo.stateCode',
-              'shipTo.zipCode',
-              'shipTo.shippingMethodCode',
-              'items.0.cost',
-              'orderDate',
-              'shipTo.phone',
-            ]
-          })
           const uniqueId = uuidv1();
-          console.dir(attachment.content.toString('utf8'), {
-            depth: 3
-          })
           const uniqueFilePath = filePath.replace(/csv$/, `${uniqueId}.csv`)
           fs.writeFile(uniqueFilePath, attachment.content, async function (err) {
             if (err) {
@@ -101,18 +98,6 @@ n.on('end', () => n.start())
                 return console.log(`JSON orders saved at ${jsonPath}`)
               })
 
-              /* 
-                            readCsv(uniqueFilePath)
-                              .then(json => json.reduce(orderReducer, []), (e) => console.error(`error reducing JSON:`, e))
-                              .then(orders => {
-                                const jsonFileName = attachment.fileName.replace(/csv/, `${uniqueId}.json`)
-                                const jsonPath = (imap.directory || "/tmp") + '/json/' + jsonFileName;
-                                fs.writeFile(jsonPath, JSON.stringify(orders), (err) => {
-                                  if (err) return console.error(err);
-                                  return console.log(`JSON orders saved at ${jsonPath}`)
-                                })
-                              }, (e) => console.error('error saving json', e)) */
-
               /** @todo Verify no overlap with the folders/depth that the SD integration is watching */
 
             }
@@ -131,17 +116,6 @@ n.on('end', () => n.start())
   }))
   .start()
 
-
-/**
- * @summary Reads CSV from disk to formatted JSON
- * @param {string} path CSV location on disk
- * @returns {Promise<Array>} Collection of purchase order objects
- */
-async function readCsv(path, converter) {
-  const jsonArray = await converter.fromFile(path)
-  const combinedOrders = jsonArray.reduce(orderReducer, [])
-  return combinedOrders
-}
 
 /**
  * @description Reduces a JSON array of purchase order objects by finding duplicate POs and combining their items arrays 
