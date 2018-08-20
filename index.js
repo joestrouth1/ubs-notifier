@@ -25,25 +25,6 @@ const imap = {
 };
 
 
-const converter = csv({
-  headers: [
-    'poNumber',
-    'items.0.quantity',
-    'items.0.model',
-    'items.0.description',
-    'shipTo.name',
-    'shipTo.company',
-    'shipTo.address1',
-    'shipTo.address2',
-    'shipTo.city',
-    'shipTo.stateCode',
-    'shipTo.zipCode',
-    'shipTo.shippingMethodCode',
-    'items.0.cost',
-    'orderDate',
-    'shipTo.phone',
-  ]
-})
 
 const n = notifier(imap)
 //@ts-ignore
@@ -69,9 +50,30 @@ n.on('end', () => n.start())
         if (fileExtension === 'csv') {
           /**
            * Create CSV to JSON converter
+           * DO create for each attachment.
+           * DO NOT init singleton converter. Will cause STREAM_WRITE_AFTER_END errors on subsequent emails 
            * @description CSV->JSON constructor
            * @prop {array} Headers - Property names to replace CSVs current headers. Supports nested output.
            */
+          const converter = csv({
+            headers: [
+              'poNumber',
+              'items.0.quantity',
+              'items.0.model',
+              'items.0.description',
+              'shipTo.name',
+              'shipTo.company',
+              'shipTo.address1',
+              'shipTo.address2',
+              'shipTo.city',
+              'shipTo.stateCode',
+              'shipTo.zipCode',
+              'shipTo.shippingMethodCode',
+              'items.0.cost',
+              'orderDate',
+              'shipTo.phone',
+            ]
+          })
           const uniqueId = uuidv1();
           const uniqueFilePath = filePath.replace(/csv$/, `${uniqueId}.csv`)
           fs.writeFile(uniqueFilePath, attachment.content, async function (err) {
