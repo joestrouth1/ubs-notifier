@@ -1,7 +1,7 @@
 //@ts-check
 require('dotenv').config()
 const fs = require('fs')
-const async = require('async')
+const each = require('async/each')
 const mime = require('mime')
 const uuidv1 = require('uuid/v1')
 const csv = require('csvtojson')
@@ -24,29 +24,6 @@ const imap = {
   directory: process.env.ATTACHMENT_DIRECTORY
 };
 
-/**
- * @description CSV->JSON constructor
- * @prop {array} Headers - Property names to replace CSVs current headers. Supports nested output.
- */
-const converter = csv({
-  headers: [
-    'poNumber',
-    'items.0.quantity',
-    'items.0.model',
-    'items.0.description',
-    'shipTo.name',
-    'shipTo.company',
-    'shipTo.address1',
-    'shipTo.address2',
-    'shipTo.city',
-    'shipTo.stateCode',
-    'shipTo.zipCode',
-    'shipTo.shippingMethodCode',
-    'items.0.cost',
-    'orderDate',
-    'shipTo.phone',
-  ]
-})
 
 
 const n = notifier(imap)
@@ -65,29 +42,61 @@ n.on('end', () => n.start())
     })
 
     if (attachments) {
-      attachments.forEach(attachment => {
+      each(attachments, attachment => {
         const filePath = (imap.directory || "/tmp") + '/' + attachment.fileName;
         const fileExtension = mime.getExtension(attachment.contentType)
 
         // If attachment is CSV, save to root attachments folder
         if (fileExtension === 'csv') {
+          /**
+           * Create CSV to JSON converter
+           * @description CSV->JSON constructor
+           * @prop {array} Headers - Property names to replace CSVs current headers. Supports nested output.
+           */
+          const converter = csv({
+            headers: [
+              'poNumber',
+              'items.0.quantity',
+              'items.0.model',
+              'items.0.description',
+              'shipTo.name',
+              'shipTo.company',
+              'shipTo.address1',
+              'shipTo.address2',
+              'shipTo.city',
+              'shipTo.stateCode',
+              'shipTo.zipCode',
+              'shipTo.shippingMethodCode',
+              'items.0.cost',
+              'orderDate',
+              'shipTo.phone',
+            ]
+          })
           const uniqueId = uuidv1();
-          const uniqueFilePath = filePath.replace(/csv/, `${uniqueId}.csv`)
+          console.dir(attachment.content.toString('utf8'), {
+            depth: 3
+          })
+          const uniqueFilePath = filePath.replace(/csv$/, `${uniqueId}.csv`)
           fs.writeFile(uniqueFilePath, attachment.content, async function (err) {
             if (err) {
               console.error(`error writing CSV to ${uniqueFilePath}`)
-              throw err
             } else {
               console.log(`CSV saved at ${uniqueFilePath}`)
               // Convert CSV to JSON, reduce orders, and save output to 'json' subfolder
-
-              const orders = await readCsv(uniqueFilePath)
+              /**
+               * DO NOT read file content from newly saved CSV. Causes read/write stream errors on subsequent order emails.
+               * DO read attachment content from parsed email.
+               * DO convert attachment content from buffer to string. 
+               * GIVEN that attachment.content is a buffer and not a stream, seems that lib is using nodemailer's simpleParser class,
+               * rather than MailParser.
+               */
+              const jsonArray = await converter.fromString(attachment.content.toString('utf8'))
+              const combinedOrders = jsonArray.reduce(orderReducer, [])
               const jsonFileName = attachment.fileName.replace(/csv/, `${uniqueId}.json`)
               const jsonPath = (imap.directory || "/tmp") + '/json/' + jsonFileName;
-              fs.writeFile(jsonPath, JSON.stringify(orders), (err) => {
+              fs.writeFile(jsonPath, JSON.stringify(combinedOrders), (err) => {
                 if (err) {
                   console.error('error writing json to disk');
-                  throw err
                 }
                 return console.log(`JSON orders saved at ${jsonPath}`)
               })
@@ -109,23 +118,10 @@ n.on('end', () => n.start())
             }
           })
         } else {
-          // if attachment is not CSV, save to 'invalid' subfolder
+          // Failed CSV file extension check
           console.warn(`Not a CSV file: ${attachment.fileName}`)
-          /* 
-           * Removed saving of non-csv files, as they aren't needed on disk.
-           * Mainly due to tiny logos and links in email signatures and such.
-           * No telling what other attachments, of what size/type may get saved.
-           */
-          /* const invalidPath = `${imap.directory}/invalid/${attachment.fileName}`
-          fs.writeFile(invalidPath, attachment.content, (err) => {
-            if (err) {
-              console.error(`error writing attachment at ${invalidPath}`, err)
-            } else {
-              console.log(`File saved at ${invalidPath}`)
-            }
-          }) */
         }
-      })
+      }, (err) => err && console.error(err))
     } else {
       console.warn(`Mail did not have any attachments, not touching it.`)
     }
@@ -141,7 +137,7 @@ n.on('end', () => n.start())
  * @param {string} path CSV location on disk
  * @returns {Promise<Array>} Collection of purchase order objects
  */
-async function readCsv(path) {
+async function readCsv(path, converter) {
   const jsonArray = await converter.fromFile(path)
   const combinedOrders = jsonArray.reduce(orderReducer, [])
   return combinedOrders
